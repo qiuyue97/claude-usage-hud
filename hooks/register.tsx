@@ -63,9 +63,10 @@ export const register: Register = on => {
     await update($, snapshot, () => toSnapshot(usage))
     const at = await $.clock.now()
     await update($, now, () => at)
-    // keep reset countdowns fresh between turns
+    // keep reset countdowns fresh between turns, and pick up whatever the engine last heard
     $.clock.every(60_000, async () => {
-      const t = await $.clock.now()
+      const [t, u] = await Promise.all([$.clock.now(), $.session.usage()])
+      await update($, snapshot, () => toSnapshot(u))
       await update($, now, () => t)
     })
 
@@ -137,8 +138,18 @@ export const register: Register = on => {
 
     for (const kind of ['five_hour', 'seven_day']) {
       const limit = snap.limits.find(l => l.kind === kind)
-      const reset = limit?.resetsAt ? `↻ ${countdown(Date.parse(limit.resetsAt) - at)}` : ''
-      rows.push(metric(kind, LABEL[kind] ?? kind, limit?.percentUsed, reset, limit && pace(limit, at)))
+      // past its reset time the window has rolled over; new figures arrive with the next reply
+      const expired = !!limit?.resetsAt && Date.parse(limit.resetsAt) <= at
+      const reset = !limit?.resetsAt ? '' : expired ? '↻ reset' : `↻ ${countdown(Date.parse(limit.resetsAt) - at)}`
+      rows.push(
+        metric(
+          kind,
+          LABEL[kind] ?? kind,
+          expired ? 0 : limit?.percentUsed,
+          reset,
+          expired ? undefined : limit && pace(limit, at),
+        ),
+      )
     }
 
     for (const limit of snap.limits.filter(l => !WINDOW_MS[l.kind])) {

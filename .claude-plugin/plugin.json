@@ -1,6 +1,6 @@
 {
   "name": "usage-hud",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A line under the prompt with 5h / 7d usage limits and context window as colored bars",
   "author": { "name": "qiuyue97" },
   "types": "./types/index.d.ts"

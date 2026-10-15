@@ -54,3 +54,33 @@ test('band shows context, 5h and 1w', async ($, on) => {
     }
   }
 })
+
+test('a window past its reset time shows as reset', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  on('session.usage', () => ({ value: {
+    startedAt: NOW,
+    context: { tokens: 1000, window: 200_000, percent: 1 },
+    rateLimits: [
+      { kind: 'five_hour', percentUsed: 97, resetsAt: new Date(NOW - 10 * 60_000).toISOString() },
+      { kind: 'seven_day', percentUsed: 40, resetsAt: new Date(NOW + 76 * 3600_000).toISOString() },
+    ],
+    cost: { usd: 0 },
+  } }))
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  const ui = await $.ui.mount({
+    plugin: 'usage-hud',
+    surface: 'terminal',
+    component: 'PromptHint',
+    props: PROPS,
+    viewport: { columns: 140, rows: 40 },
+  })
+  expect(await ui.find({ type: 'Text', text: /↻ reset/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /97%/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /fast/ })).toBeUndefined()
+  await ui.unmount()
+})
